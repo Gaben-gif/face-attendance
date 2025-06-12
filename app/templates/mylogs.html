@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>My Attendance Logs</title>
+  </head>
+  <body>
+    <h2>My Attendance Logs</h2>
+    {% if logs %}
+      <table border="1">
+        <tr>
+          <th>Date/Time</th>
+          <th>Status</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td>{{ log.status }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p>No attendance records found.</p>
+    {% endif %}
+    <a href="{{ url_for('main.attendance') }}">Back</a>
+  </body>
+</html>

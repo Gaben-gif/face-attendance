@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Attendance Logs</title>
+    <style>
+      table { border-collapse: collapse; width: 60%; margin: 20px auto; }
+      th, td { border: 1px solid #999; padding: 8px; text-align: center; }
+      th { background: #eee; }
+    </style>
+  </head>
+  <body>
+    <h2 style="text-align:center;">Attendance Log</h2>
+    <table>
+      <tr>
+        <th>Name</th>
+        <th>Timestamp</th>
+      </tr>
+      {% for log in logs %}
+      <tr>
+        <td>{{ log.user.name }}</td>
+        <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div style="text-align:center;">
+      <a href="/">Back to Attendance</a> | <a href="/register">Register</a>
+    </div>
+  </body>
+</html>

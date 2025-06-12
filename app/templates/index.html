@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Welcome to the Face Attendance System</h2>
+    {% if current_user.is_authenticated %}
+        <p>Hello, {{ current_user.name }}!</p>
+        <p>Use the navigation links above to manage attendance, users, courses, and more.</p>
+    {% else %}
+        <p>Please <a href="{{ url_for('main.login') }}">log in</a> or <a href="{{ url_for('main.register') }}">register</a> to continue.</p>
+    {% endif %}
+</div>
+{% endblock %}

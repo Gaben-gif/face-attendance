@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>All Users</title>
+  </head>
+  <body>
+    <h2>All Users</h2>
+    <table border="1">
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Actions</th>
+      </tr>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.name }}</td>
+        <td>{{ user.role }}</td>
+        <td>
+          <a href="{{ url_for('main.edit_user', user_id=user.id) }}">Edit</a>
+          {% if current_user.role == 'admin' and user.id != current_user.id %}
+          <form method="POST" action="{{ url_for('main.delete_user', user_id=user.id) }}">
+            <button type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <a href="{{ url_for('main.attendance_page') }}">Back</a>
+  </body>
+</html>

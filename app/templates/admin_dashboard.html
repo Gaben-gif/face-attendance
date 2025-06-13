@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+  <h1>Welcome, Admin!</h1>
+  <ul>
+    <li><a href="{{ url_for('main.show_users') }}">Manage Users</a></li>
+    <li><a href="{{ url_for('main.create_course') }}">Manage Courses</a></li>
+    <li><a href="{{ url_for('main.create_semester') }}">Manage Semesters</a></li>
+    <li><a href="{{ url_for('main.show_logs') }}">View All Attendance</a></li>
+  </ul>
+{% endblock %}

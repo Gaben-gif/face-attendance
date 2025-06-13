@@ -2,7 +2,7 @@ import os
 import numpy as np
 import cv2
 import face_recognition
-from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for, request, abort, flash
+from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for, abort, flash
 from . import db
 from datetime import datetime, timedelta
 from app import login
@@ -31,91 +31,64 @@ def register():
         name = request.form['name']
         password = request.form['password']
         role = request.form['role']
-        image_file = request.files['image']
 
-        # Save image
-        if not image_file:
-            return render_template('register.html', error="Image required")
-        image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], image_file.filename)
-        image_file.save(image_path)
+        # Collect all uploaded face images
+        face_images = []
+        for i in range(5):  # Adjust if you change maxCaptures
+            file = request.files.get(f'face_image_{i}')
+            if file:
+                face_images.append(file)
 
-        # Encode face
-        img = face_recognition.load_image_file(image_path)
-        encodings = face_recognition.face_encodings(img)
-        if len(encodings) != 1:
-            os.remove(image_path)
-            return render_template('register.html', error="Exactly one face must be visible in the image.")
-        encoding = encodings[0]
+        if len(face_images) < 5:
+            return render_template('register.html', error="Please capture all face images.")
 
-        # Save user
-        user = User(name=name, face_encoding=encoding, image_path=image_file.filename, role=role)
+        encodings = []
+        for idx, img_file in enumerate(face_images):
+            img = face_recognition.load_image_file(img_file)
+            face_locations = face_recognition.face_locations(img)
+            print(f"Image {idx+1}: Detected {len(face_locations)} faces")
+            if len(face_locations) < 1:
+                return render_template('register.html', error=f"Image {idx+1}: No face detected. Please try again.")
+            elif len(face_locations) > 1:
+                return render_template('register.html', error=f"Image {idx+1}: Multiple faces detected. Only one person should be visible.")
+            encoding = face_recognition.face_encodings(img, face_locations)[0]
+            encodings.append(encoding)
+
+        # Store encodings as a list (using PickleType in your model)
+        user = User(name=name, role=role)
         user.set_password(password)
+        user.face_encoding = encodings  # PickleType can store a list
         db.session.add(user)
         db.session.commit()
+        flash('Registration successful! Please log in.')
         return redirect(url_for('main.login'))
+
     return render_template('register.html')
 
-@bp.route('/api/register', methods=['POST'])
-def register_user():
-    data = request.form
-    name = data.get('name')
-    image_file = request.files['image']
-    if not name or not image_file:
-        return jsonify({'success': False, 'msg': 'Missing name or image.'}), 400
 
-    # Save image
-    filename = secure_filename(f"{name}_{datetime.utcnow().timestamp()}.jpg")
-    img_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-    os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
-    image_file.save(img_path)
+@bp.route('/api/mark_attendance', methods=['POST'])
+@login_required
+def mark_attendance():
+    image_file = request.files.get('image')
+    if not image_file:
+        return jsonify({'success': False, 'msg': 'No image provided.'}), 400
 
-    # Load image and generate encoding
-    img = face_recognition.load_image_file(img_path)
+    img = face_recognition.load_image_file(image_file)
     face_locations = face_recognition.face_locations(img)
     if len(face_locations) != 1:
-        os.remove(img_path)
         return jsonify({'success': False, 'msg': 'No face or multiple faces detected.'}), 400
     encoding = face_recognition.face_encodings(img, face_locations)[0]
 
-    # Save user
-    user = User(name=name, face_encoding=encoding, image_path=filename)
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({'success': True, 'msg': 'Registration successful!'})
-
-@bp.route('/api/mark_attendance', methods=['POST'])
-def mark_attendance():
-    image_file = request.files['image']
-    if not image_file:
-        return jsonify({'success': False, 'msg': 'Image missing'}), 400
-    img = face_recognition.load_image_file(image_file)
-    face_locations = face_recognition.face_locations(img)
-    if len(face_locations) == 0:
-        return jsonify({'success': False, 'msg': 'No face detected'}), 400
-    encoding = face_recognition.face_encodings(img, face_locations)[0]
-
-    # Compare with DB
+    # Compare with all users
     users = User.query.all()
-    matches = []
     for user in users:
-        match = face_recognition.compare_faces([np.array(user.face_encoding)], encoding, tolerance=0.6)[0]
-        if match:
-            matches.append(user)
-
-    if not matches:
-        return jsonify({'success': False, 'msg': 'No matching user found'}), 404
-
-    user = matches[0]
-    # Prevent duplicate attendance within 5 minutes
-    five_min_ago = datetime.utcnow() - timedelta(minutes=5)
-    recent = AttendanceLog.query.filter_by(user_id=user.id).filter(AttendanceLog.timestamp > five_min_ago).first()
-    if recent:
-        return jsonify({'success': True, 'msg': f"Welcome back, {user.name}! Attendance already logged recently."})
-
-    log = AttendanceLog(user_id=user.id)
-    db.session.add(log)
-    db.session.commit()
-    return jsonify({'success': True, 'msg': f"Welcome, {user.name}! Attendance logged."})
+        if user.face_encoding is not None:
+            stored_encoding = np.array(user.face_encoding)
+            match = face_recognition.compare_faces([stored_encoding], encoding, tolerance=0.6)[0]
+            if match:
+                # Mark attendance logic here
+                return jsonify({'success': True, 'msg': f'Attendance marked for {user.name}.'})
+    return jsonify({'success': False, 'msg': 'Face not recognized.'}), 401
 
 @bp.route('/logs')
 @login_required
@@ -138,11 +111,18 @@ def login():
         user = User.query.filter_by(name=name).first()
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for('main.attendance_page'))  # or another start page
+            # Redirect based on user role
+            if user.role == 'admin':
+                return redirect(url_for('main.admin_dashboard'))
+            elif user.role == 'teacher':
+                return redirect(url_for('main.teacher_dashboard'))
+            elif user.role == 'student':
+                return redirect(url_for('main.student_dashboard'))
+            else:
+                return redirect(url_for('main.attendance_page'))  # fallback
         else:
             error = "Invalid name or password"
     return render_template('login.html', error=error)
-
 
 @bp.route('/users')
 @login_required
@@ -190,7 +170,6 @@ def edit_user(user_id):
 
     return render_template('edit_user.html', user=user)
 
-
 @bp.route('/user/<int:user_id>/delete', methods=['POST'])
 @login_required
 def delete_user(user_id):
@@ -230,7 +209,7 @@ def create_course():
     form = CourseForm()
     # Populate select fields
     form.teacher.choices = [(t.id, t.name) for t in User.query.filter_by(role='teacher').all()]
-    form.semester.choices = [(s.id, s.name) for s in Semester.query.all()]
+    #form.semester.choices = [(s.id, s.name) for s in Semester.query.all()]
     if form.validate_on_submit():
         course = Course(
             name=form.name.data,
@@ -269,3 +248,41 @@ def create_enrollment():
             flash('Student enrolled!')
         return redirect(url_for('main.index'))
     return render_template('create_enrollment.html', form=form)
+
+@bp.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    return render_template('admin_dashboard.html')
+
+@bp.route('/teacher/dashboard')
+@login_required
+def teacher_dashboard():
+    return render_template('teacher_dashboard.html')
+
+@bp.route('/student/dashboard')
+@login_required
+def student_dashboard():
+    return render_template('student_dashboard.html')
+
+@bp.route('/api/login_face', methods=['POST'])
+def login_face():
+    name = request.form.get('name')
+    image_file = request.files.get('image')
+    user = User.query.filter_by(name=name).first()
+    if not user or not user.face_encoding:
+        return jsonify({'success': False, 'msg': 'User not found or no face encoding.'}), 404
+
+    img = face_recognition.load_image_file(image_file)
+    face_locations = face_recognition.face_locations(img)
+    if len(face_locations) != 1:
+        return jsonify({'success': False, 'msg': 'No face or multiple faces detected.'}), 400
+    encoding = face_recognition.face_encodings(img, face_locations)[0]
+
+    # Compare against all stored encodings (face_encoding is a list)
+    import numpy as np
+    matches = face_recognition.compare_faces([np.array(e) for e in user.face_encoding], encoding, tolerance=0.6)
+    if any(matches):
+        login_user(user)
+        return jsonify({'success': True, 'msg': 'Login successful!', 'role': user.role})
+    else:
+        return jsonify({'success': False, 'msg': 'Face does not match.'}), 401

@@ -2,12 +2,12 @@ from . import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
+from sqlalchemy.types import PickleType
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
-    face_encoding = db.Column(db.PickleType, nullable=True)  # Nullable for admin/teacher if needed
-    image_path = db.Column(db.String(200), nullable=True)    # Nullable for admin/teacher if needed
+    face_encoding = db.Column(PickleType, nullable=True)  # Nullable for admin/teacher if needed   
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(32), nullable=False, default='student')  # student, teacher, admin
 

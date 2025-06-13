@@ -1,55 +1,47 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Attendance</title>
-    <style>
-      video, canvas { display: block; margin: 10px 0; }
-    </style>
-  </head>
-  <body>
-    <h2>Mark Attendance</h2>
-    <form id="attendance-form">
-      <video id="video" width="320" height="240" autoplay></video>
-      <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
-      <br>
-      <button type="button" id="capture">Capture Photo</button>
-      <button type="submit">Mark Attendance</button>
-    </form>
-    <div id="result"></div>
-    <script>
-      // Webcam setup
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const captureBtn = document.getElementById('capture');
-      const form = document.getElementById('attendance-form');
-      const result = document.getElementById('result');
-      let capturedBlob = null;
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+  <h2>Mark Attendance</h2>
+  <form id="attendance-form">
+    <video id="video" width="320" height="240" autoplay></video>
+    <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+    <br>
+    <button type="button" id="capture">Capture Photo</button>
+    <button type="submit">Mark Attendance</button>
+  </form>
+  <div id="result"></div>
+  <script>
+    // Webcam setup
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture');
+    const form = document.getElementById('attendance-form');
+    const result = document.getElementById('result');
+    let capturedBlob = null;
 
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => { video.srcObject = stream; });
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; });
 
-      captureBtn.onclick = function() {
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => { capturedBlob = blob; }, 'image/jpeg');
-        result.textContent = 'Photo captured! Now click Mark Attendance.';
-      };
+    captureBtn.onclick = function() {
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => { capturedBlob = blob; }, 'image/jpeg');
+      result.textContent = 'Photo captured! Now click Mark Attendance.';
+    };
 
-      form.onsubmit = function(e) {
-        e.preventDefault();
-        if (!capturedBlob) {
-          result.textContent = 'Please capture a photo first.';
-          return;
-        }
-        const formData = new FormData();
-        formData.append('image', capturedBlob, 'attendance.jpg');
-        fetch('/api/mark_attendance', {
-          method: 'POST',
-          body: formData
-        }).then(r => r.json()).then(data => {
-          result.textContent = data.msg;
-        });
-      };
-    </script>
-  </body>
-</html>
+    form.onsubmit = function(e) {
+      e.preventDefault();
+      if (!capturedBlob) {
+        result.textContent = 'Please capture a photo first.';
+        return;
+      }
+      const formData = new FormData();
+      formData.append('image', capturedBlob, 'attendance.jpg');
+      fetch('/api/mark_attendance', {
+        method: 'POST',
+        body: formData
+      }).then(r => r.json()).then(data => {
+        result.textContent = data.msg;
+      });
+    };
+  </script>
+{% endblock %}

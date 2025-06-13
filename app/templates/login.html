@@ -1,19 +1,101 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Login</title>
-  </head>
-  <body>
-    <h2>Login</h2>
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+  <h2>Login</h2>
+  <form id="login-form" method="POST" enctype="multipart/form-data">
+    <label for="name">Username:</label>
+    <input type="text" name="name" id="name" required><br>
+    <label for="password">Password:</label>
+    <input type="password" name="password" id="password" required><br>
+    <button type="submit">Login</button>
     {% if error %}
       <p style="color:red;">{{ error }}</p>
     {% endif %}
-    <form method="POST">
-      <input type="text" name="name" placeholder="Full Name" required>
-      <input type="password" name="password" placeholder="Password" required>
-      <button type="submit">Login</button>
-    </form>
-    <a href="/register">Register</a>
-  </body>
-</html>
+  </form>
+
+  <hr>
+  <h3>Or Login with Face</h3>
+  <input type="text" id="face-username" placeholder="Enter your username" required>
+  <div style="position: relative; width: 320px; height: 240px;">
+    <video id="video" width="320" height="240" autoplay style="position: absolute; top: 0; left: 0;"></video>
+    <canvas id="canvas" width="320" height="240" style="position: absolute; top: 0; left: 0;"></canvas>
+  </div>
+  <button id="capture-btn">Capture & Login with Face</button>
+  <p id="face-login-msg"></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const captureBtn = document.getElementById('capture-btn');
+  const msg = document.getElementById('face-login-msg');
+
+  Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri('/static/models')
+  ]).then(startVideo);
+
+  function startVideo() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { msg.textContent = "Webcam access denied."; });
+  }
+
+  video.addEventListener('play', () => {
+    const displaySize = { width: video.width, height: video.height };
+    faceapi.matchDimensions(canvas, displaySize);
+    setInterval(async () => {
+      const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+      const resizedDetections = faceapi.resizeResults(detections, displaySize);
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      faceapi.draw.drawDetections(canvas, resizedDetections);
+      if (detections.length === 1) {
+        msg.style.color = "green";
+        msg.textContent = "Face detected. Ready to login.";
+        captureBtn.disabled = false;
+      } else if (detections.length > 1) {
+        msg.style.color = "red";
+        msg.textContent = "Multiple faces detected. Only one person should be visible.";
+        captureBtn.disabled = true;
+      } else {
+        msg.style.color = "red";
+        msg.textContent = "No face detected. Please position your face in view.";
+        captureBtn.disabled = true;
+      }
+    }, 200);
+  });
+
+  captureBtn.onclick = function() {
+    const username = document.getElementById('face-username').value;
+    if (!username) {
+      msg.textContent = "Please enter your username.";
+      return;
+    }
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      const formData = new FormData();
+      formData.append('name', username);
+      formData.append('image', blob, 'face.jpg');
+      fetch('/api/login_face', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            msg.style.color = "green";
+            msg.textContent = data.msg + " Redirecting...";
+            let redirectUrl = "/";
+            if (data.role === "admin") {
+              redirectUrl = "/admin/dashboard";
+            } else if (data.role === "teacher") {
+              redirectUrl = "/teacher/dashboard";
+            } else if (data.role === "student") {
+              redirectUrl = "/student/dashboard";
+            }
+            setTimeout(() => { window.location.href = redirectUrl; }, 1000);
+          } else {
+            msg.style.color = "red";
+            msg.textContent = data.msg;
+          }
+        });
+    }, 'image/jpeg');
+  };
+  </script>
+{% endblock %}

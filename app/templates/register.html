@@ -1,25 +1,131 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Register</title>
-  </head>
-  <body>
-    <h2>Register</h2>
-    <form method="POST" enctype="multipart/form-data">
-      <input type="text" name="name" placeholder="Full Name" required>
-      <input type="password" name="password" placeholder="Password" required>
-      <select name="role" required>
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+  <h2>Register</h2>
+  {% if error %}
+    <p style="color:red;">{{ error }}</p>
+    <button type="button" onclick="window.location.reload()">Try Again</button>
+  {% endif %}
+  <form id="register-form" method="post" enctype="multipart/form-data">
+    <div>
+      <label for="name">Username:</label>
+      <input type="text" id="name" name="name" required>
+    </div>
+    <div>
+      <label for="password">Password:</label>
+      <input type="password" id="password" name="password" required>
+    </div>
+    <div>
+      <label for="role">Role:</label>
+      <select name="role" id="role" required>
         <option value="student">Student</option>
         <option value="teacher">Teacher</option>
         <option value="admin">Admin</option>
       </select>
-      <input type="file" name="image" accept="image/*" required>
-      <button type="submit">Register</button>
-    </form>
-    {% if error %}
-      <p style="color:red;">{{ error }}</p>
-    {% endif %}
-    <a href="/login">Login</a>
-  </body>
-</html>
+    </div>
+    <hr>
+    <h3>Capture Your Face</h3>
+    <div style="position: relative; width: 320px; height: 240px;">
+      <video id="video" width="320" height="240" autoplay style="position: absolute; top: 0; left: 0;"></video>
+      <canvas id="canvas" width="320" height="240" style="position: absolute; top: 0; left: 0;"></canvas>
+    </div>
+    <button type="button" id="capture-btn">Capture Face</button>
+    <input type="hidden" name="face_captured" id="face_captured" value="0">
+    <p id="face-msg" style="color:red;"></p>
+    <br>
+    <button type="submit">Register</button>
+  </form>
+
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const captureBtn = document.getElementById('capture-btn');
+const faceMsg = document.getElementById('face-msg');
+const form = document.getElementById('register-form');
+const registerBtn = form.querySelector('button[type="submit"]');
+let faceBlobs = [];
+let captureCount = 0;
+const maxCaptures = 5;
+
+Promise.all([
+  faceapi.nets.tinyFaceDetector.loadFromUri('/static/models')
+]).then(startVideo);
+
+function startVideo() {
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => { video.srcObject = stream; })
+    .catch(err => { faceMsg.textContent = "Webcam access denied."; });
+}
+
+video.addEventListener('play', () => {
+  const displaySize = { width: video.width, height: video.height };
+  faceapi.matchDimensions(canvas, displaySize);
+  setInterval(async () => {
+    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+    canvas.style.display = "block";
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    faceapi.draw.drawDetections(canvas, resizedDetections);
+    if (detections.length === 1) {
+      faceMsg.style.color = "green";
+      faceMsg.textContent = `Face detected. Click capture (${captureCount+1}/${maxCaptures}).`;
+      captureBtn.disabled = false;
+    } else if (detections.length > 1) {
+      faceMsg.style.color = "red";
+      faceMsg.textContent = "Multiple faces detected. Only one person should be visible.";
+      captureBtn.disabled = true;
+    } else {
+      faceMsg.style.color = "red";
+      faceMsg.textContent = "No face detected. Please position your face in view.";
+      captureBtn.disabled = true;
+    }
+  }, 200);
+});
+
+captureBtn.onclick = function() {
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob => {
+    faceBlobs.push(blob);
+    captureCount++;
+    if (captureCount < maxCaptures) {
+      faceMsg.style.color = "blue";
+      faceMsg.textContent = `Captured ${captureCount}. Please turn your head and capture again (${captureCount+1}/${maxCaptures}).`;
+      captureBtn.textContent = `Capture Face (${captureCount+1}/${maxCaptures})`;
+    } else {
+      faceMsg.style.color = "green";
+      faceMsg.textContent = "All images captured! You can now register.";
+      registerBtn.disabled = false;
+      captureBtn.disabled = true;
+      captureBtn.textContent = "Done";
+      document.getElementById('face_captured').value = "1";
+    }
+  }, 'image/jpeg');
+};
+
+form.onsubmit = function(e) {
+  if (document.getElementById('face_captured').value !== "1") {
+    faceMsg.style.color = "red";
+    faceMsg.textContent = "Please capture all face images before registering.";
+    e.preventDefault();
+    return false;
+  }
+  e.preventDefault();
+  const formData = new FormData(form);
+  faceBlobs.forEach((blob, idx) => {
+    formData.append('face_image_' + idx, blob, `face${idx}.jpg`);
+  });
+  fetch("", { method: "POST", body: formData })
+    .then(res => res.text())
+    .then(html => {
+      document.open();
+      document.write(html);
+      document.close();
+    });
+};
+
+// Disable register button until all faces are captured
+registerBtn.disabled = true;
+captureBtn.textContent = `Capture Face (1/${maxCaptures})`;
+  </script>
+{% endblock %}

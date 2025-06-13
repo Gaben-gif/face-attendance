@@ -1,4 +1,35 @@
-instance/
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 *.pyc
-.env
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Flask instance folder (contains uploads, secrets, etc.)
+instance/
+*.sqlite3
+*.db
+
+# VS Code settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python egg info
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Model files (if large and not tracked)
+app/static/models/
